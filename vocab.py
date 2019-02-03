@@ -7,9 +7,6 @@ from urllib.parse import urlencode
 
 class DefinitionFetcher:
 
-    class IncorrectWord(Exception):
-        pass
-
     class NoDefinition(Exception):
         pass
 
@@ -37,8 +34,6 @@ class BabLaFetcher(DefinitionFetcher):
 
     @staticmethod
     def definition(word):
-        if not len(word.split(' ')) == 1:
-            raise DefinitionFetcher.IncorrectWord
         _def = BabLaFetcher.html_to_card_text(BabLaFetcher.fetch_html(word))
         if _def.strip() == '':
             raise DefinitionFetcher.NoDefinition
@@ -57,8 +52,8 @@ class AnkiWriter:
             ],
             templates=[{
                     'name': 'Card 1',
-                    'qfmt': '{{Word}}',
-                    'afmt': '{{FrontSide}}<hr />{{Definition}}'
+                    'qfmt': '{{Definition}}',
+                    'afmt': '<h3>{{Word}}</h3><hr />{{FrontSide}}'
                 }]
         )
         my_deck = genanki.Deck(
@@ -77,8 +72,6 @@ def convert_word_list(in_filename, out_deck_name, out_filename):
         line = line.strip()
         try:
             data.append([line, BabLaFetcher.definition(line).replace('\n', '<br />')])
-        except DefinitionFetcher.IncorrectWord:
-            print('Incorrect Word:', line)
         except DefinitionFetcher.NoDefinition:
             print('No definition found for', line)
     AnkiWriter.save(data, out_deck_name, out_filename)
