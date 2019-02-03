@@ -6,7 +6,7 @@ import urllib.request
 from bs4 import BeautifulSoup
 from urllib.parse import urlencode
 
-from debug_utils import header, nab
+from debug_utils import header, nab, enable
 
 
 def encode(word):
@@ -113,31 +113,23 @@ class AnkiWriter:
 
 
 def convert_word_list(in_filename, out_deck_name, out_filename):
+    fetchers = [BabLaFetcher, MerriamWebsterFetcher]
     data = []
-    for line in io.open(in_filename, mode='r', encoding='utf-8').read().split('\n'):
-        line = line.strip()
+    for word in io.open(in_filename, mode='r', encoding='utf-8').read().split('\n'):
+        word = word.strip()
 
-        d1, d2 = '', ''
+        definitions = []
+        for fetcher in fetchers:
+            try:
+                definitions.append(fetcher.definition(word).replace('\n', '<br />'))
+            except DefinitionFetcher.NoDefinition:
+                pass
 
-        try:
-            d1 = BabLaFetcher.definition(line).replace('\n', '<br />')
-            nab('click')
-        except DefinitionFetcher.NoDefinition: pass
-
-        try:
-            d2 = MerriamWebsterFetcher.definition(line).replace('\n', '<br />')
-            nab('zip')
-        except DefinitionFetcher.NoDefinition: pass
-
-        if d1 and d2:
-            data.append([line, d1 + '<hr />' + d2])
-        elif d1:
-            data.append([line, d1])
-        elif d2:
-            data.append([line, d2])
-        if not (d1 or d2):
+        if not definitions:
             nab('error')
-            print('No definition found for', line)
+            print('No definition found for', word)
+        else:
+            data.append([word, '<hr />'.join(definitions)])
 
     AnkiWriter.save(data, out_deck_name, out_filename)
 
