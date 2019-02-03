@@ -1,8 +1,30 @@
 import io
+import re
 import genanki
+import urllib.error
 import urllib.request
 from bs4 import BeautifulSoup
 from urllib.parse import urlencode
+
+from debug_utils import header, nab
+
+
+def encode(word):
+    return urlencode({'': word})[1:]
+
+
+def fetch_html(url):
+    connection = urllib.request.urlopen(url)
+    ret = connection.read().decode('utf-8')
+    connection.close()
+    return ret
+
+
+def clean_up(text):
+    return re.sub(r'\n\s+\n', '\n',
+                  re.sub(r'^ +$', '',
+                         re.sub(r'\n+', '\n', text, 999999), 9999),
+                  99999).strip()
 
 
 class DefinitionFetcher:
@@ -25,17 +47,41 @@ class BabLaFetcher(DefinitionFetcher):
         return '\n'.join(out_text)
 
     @staticmethod
-    def fetch_html(word):
-        url = 'https://pl.bab.la/slownik/angielski-polski/' + (urlencode({'': word})[1:])  # for polish letters
-        connection = urllib.request.urlopen(url)
-        ret = connection.read().decode('utf-8')
-        connection.close()
+    def definition(word):
+        _def = BabLaFetcher.html_to_card_text(fetch_html('https://pl.bab.la/slownik/angielski-polski/' + encode(word)))
+        if _def.strip() == '':
+            raise DefinitionFetcher.NoDefinition
+        return _def
+
+
+class MerriamWebsterFetcher(DefinitionFetcher):
+    @staticmethod
+    def html_to_card_text(html_data):
+        b = BeautifulSoup(html_data, 'html.parser')
+        out_text = []
+        parent = b.select_one('.left-content')
+        for child in parent.children:
+            try:
+                if 'anchor-seporator' == child.get('id'):
+                    break
+                elif child.get('class') is not None and 'entry-header' in child.get('class') and 'row' in child.get('class'):
+                    out_text.append(clean_up(child.getText()))
+                elif child.get('id').startswith('dictionary-entry-'):
+                    for c in child.select('div'):
+                        if c.get('class') is not None and 'vg' in c.get('class'):
+                            out_text.append(clean_up(c.getText()))
+            except AttributeError:
+                pass
+        ret = '\n'.join(out_text)
         return ret
 
     @staticmethod
     def definition(word):
-        _def = BabLaFetcher.html_to_card_text(BabLaFetcher.fetch_html(word))
-        if _def.strip() == '':
+        _def = ''
+        try:
+            _def = MerriamWebsterFetcher.html_to_card_text(fetch_html('https://www.merriam-webster.com/dictionary/' + encode(word)))
+        except urllib.error.HTTPError: pass
+        if _def.strip() == '':  # TODO: stupid
             raise DefinitionFetcher.NoDefinition
         return _def
 
@@ -70,12 +116,32 @@ def convert_word_list(in_filename, out_deck_name, out_filename):
     data = []
     for line in io.open(in_filename, mode='r', encoding='utf-8').read().split('\n'):
         line = line.strip()
+
+        d1, d2 = '', ''
+
         try:
-            data.append([line, BabLaFetcher.definition(line).replace('\n', '<br />')])
-        except DefinitionFetcher.NoDefinition:
+            d1 = BabLaFetcher.definition(line).replace('\n', '<br />')
+            nab('click')
+        except DefinitionFetcher.NoDefinition: pass
+
+        try:
+            d2 = MerriamWebsterFetcher.definition(line).replace('\n', '<br />')
+            nab('zip')
+        except DefinitionFetcher.NoDefinition: pass
+
+        if d1 and d2:
+            data.append([line, d1 + '<hr />' + d2])
+        elif d1:
+            data.append([line, d1])
+        elif d2:
+            data.append([line, d2])
+        if not (d1 or d2):
+            nab('error')
             print('No definition found for', line)
+
     AnkiWriter.save(data, out_deck_name, out_filename)
 
 
 if __name__ == '__main__':
     convert_word_list('list.txt', 'test_deck', 'test_1')
+    nab('bird')
