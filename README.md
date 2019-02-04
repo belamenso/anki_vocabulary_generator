@@ -14,3 +14,4 @@
 * add sentences without definitions, eg. stylistically pleasing wording that you understand, but want to remember
 * handle what happens when the parser find some unexpected page - currently an error occurs
 * add some memorization/caching, since an error in the middle of 10 minute session is currently really annoying
+* empty lines in the vocab file currently break parser
